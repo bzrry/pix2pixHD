@@ -47,7 +47,8 @@ class AlignedDataset(BaseDataset):
 
         B_tensor = inst_tensor = feat_tensor = 0
         ### input B (real images)
-        if self.opt.isTrain or self.opt.use_encoded_image:
+        # always include target image in dataset so we can render comparison to prediction when testing -tjb
+        if True or self.opt.isTrain or self.opt.use_encoded_image:
             B_path = self.B_paths[index]   
             B = Image.open(B_path).convert('RGB')
             transform_B = get_transform(self.opt, params)      
