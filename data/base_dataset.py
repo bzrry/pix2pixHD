@@ -48,7 +48,8 @@ def get_transform(opt, params, method=Image.BICUBIC, normalize=True):
         transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base, method)))
 
     if opt.isTrain and not opt.no_flip:
-        transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
+        if random.random() > 0.2:
+            transform_list.append(transforms.Lambda(lambda img: img.transpose(random.sample(range(5), 1)[0])))
 
     transform_list += [transforms.ToTensor()]
 
