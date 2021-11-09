@@ -26,9 +26,10 @@ def get_params(opt, size):
 
     x = random.randint(0, np.maximum(0, new_w - opt.fineSize))
     y = random.randint(0, np.maximum(0, new_h - opt.fineSize))
-    
-    flip = random.random() > 0.5
-    return {'crop_pos': (x, y), 'flip': flip}
+
+    flip = random.random() > 0.2
+    rotation = random.sample(range(5), 1)[0]
+    return {'crop_pos': (x, y), 'flip': flip, 'rotation': rotation}
 
 def get_transform(opt, params, method=Image.BICUBIC, normalize=True):
     transform_list = []
@@ -48,8 +49,7 @@ def get_transform(opt, params, method=Image.BICUBIC, normalize=True):
         transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base, method)))
 
     if opt.isTrain and not opt.no_flip:
-        if random.random() > 0.2:
-            transform_list.append(transforms.Lambda(lambda img: img.transpose(random.sample(range(5), 1)[0])))
+        transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'], params['rotation'])))
 
     transform_list += [transforms.ToTensor()]
 
@@ -85,7 +85,7 @@ def __crop(img, pos, size):
         return img.crop((x1, y1, x1 + tw, y1 + th))
     return img
 
-def __flip(img, flip):
+def __flip(img, flip, rotation):
     if flip:
-        return img.transpose(Image.FLIP_LEFT_RIGHT)
+        return img.transpose(rotation)
     return img
