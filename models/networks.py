@@ -232,7 +232,7 @@ class ResnetBlock(nn.Module):
                        norm_layer(dim),
                        activation]
         if use_dropout:
-            conv_block += [nn.Dropout(0.5)]
+            conv_block += [nn.Dropout(0.1)]
 
         p = 0
         if padding_type == 'reflect':
