@@ -92,7 +92,8 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         if opt.fp16:                                
             with amp.scale_loss(loss_D, optimizer_D) as scaled_loss: scaled_loss.backward()                
         else:
-            loss_D.backward()        
+            # retain_graph might be necessary because of caching modified params
+            loss_D.backward(retain_graph=True)
         optimizer_D.step()        
 
         ############## Display results and errors ##########
