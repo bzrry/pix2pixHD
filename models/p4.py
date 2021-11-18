@@ -4,6 +4,8 @@ from torch import nn
 import torch.nn.functional as F
 
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 eps = 1e-5
 
 # adapted from github.com/claudio-unipv/groupcnn
@@ -16,9 +18,9 @@ class ConvZ2ToP4(nn.Module):
         self.stride = stride
         self.padding = padding
 
-        self._weight = nn.Parameter(torch.empty(out_channels, in_channels, kernel_size, kernel_size))
+        self._weight = nn.Parameter(torch.empty(out_channels, in_channels, kernel_size, kernel_size).to(device))
         nn.init.kaiming_uniform_(self._weight, a=5 ** 0.5)
-        self.bias = nn.Parameter(torch.zeros(out_channels)) if bias else None
+        self.bias = nn.Parameter(torch.zeros(out_channels).to(device)) if bias else None
 
         # make four copies of the filters, rotated element-wise
         self.weight = torch.stack([self._weight.rot90(k, dims=(2, 3)) for k in range(4)], dim=1)
@@ -45,9 +47,9 @@ class ConvP4ToP4(nn.Module):
         self.stride = stride
         self.padding = padding
 
-        self._weight = nn.Parameter(torch.empty(out_channels, in_channels, 4, kernel_size, kernel_size))
+        self._weight = nn.Parameter(torch.empty(out_channels, in_channels, 4, kernel_size, kernel_size).to(device))
         nn.init.kaiming_uniform_(self._weight, a=5 ** 0.5)
-        self.bias = nn.Parameter(torch.zeros(out_channels)) if bias else None
+        self.bias = nn.Parameter(torch.zeros(out_channels).to(device)) if bias else None
 
         # make four copies of the filters, rotated element-wise AND around the feature map circle by 90deg each time
         self.weight = torch.stack([self._weight.rot90(k, dims=(3, 4)).roll(k, 2) for k in range(4)], dim=1)
