@@ -3,6 +3,7 @@ import torch.nn as nn
 import functools
 from torch.autograd import Variable
 import numpy as np
+from vissl.models.trunks import register_model_trunk
 
 from models.p4 import ConvZ2ToP4, ConvP4ToP4, InstanceNormP4, AvgPoolP4
 
@@ -29,7 +30,7 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_global=9, n_local_enhancers=1, 
-             n_blocks_local=3, norm='instance', gpu_ids=[]):    
+             n_blocks_local=3, norm='instance', gpu_ids=[], downsampler_state=None):
     norm_layer = get_norm_layer(norm_type=norm)     
     if netG == 'global':    
         netG = GlobalGenerator(
@@ -39,6 +40,7 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
             n_downsample_global,
             n_blocks_global,
             norm_layer,
+            downsampler_state=downsampler_state,
         )
     elif netG == 'local':        
         netG = LocalEnhancer(input_nc, output_nc, ngf, n_downsample_global, n_blocks_global, 
@@ -192,7 +194,7 @@ class LocalEnhancer(nn.Module):
         return output_prev
 
 class GlobalGeneratorDownsampler(nn.Module):
-    def __init__(self, input_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+    def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
         assert (n_blocks >= 0)
         super().__init__()
         activation = nn.ReLU(True)
@@ -215,20 +217,21 @@ class GlobalGeneratorDownsampler(nn.Module):
     def forward(self, input):
         return self.model(input)
 
+@register_model_trunk("pix2pixHDEmbedder")
 class GlobalGeneratorSSLEmbedder(nn.Module):
-    def __init__(self, input_nc, embedding_dim=128, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
-                 padding_type='reflect'):
+    def __init__(self, model_config, model_name):
         super().__init__()
-        self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
+        embedding_dim = 2048
+        self.downsampler = GlobalGeneratorDownsampler()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(self.downsampler.out_channels, embedding_dim)
 
-    def forward(self, x):
+    def forward(self, x, out_feat_keys):
         x = self.downsampler(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-        return x
+        return [x]
 
 class GlobalGeneratorUpsampler(nn.Module):
     def __init__(self, output_nc, ngf=64, n_downsampling=3, norm_layer=nn.BatchNorm2d):
@@ -240,7 +243,8 @@ class GlobalGeneratorUpsampler(nn.Module):
             mult = 2**(n_downsampling - i)
             model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), kernel_size=3, stride=2, padding=1, output_padding=1),
                        norm_layer(int(ngf * mult / 2)), activation]
-        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]        
+
+        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]
         self.model = nn.Sequential(*model)
             
     def forward(self, input):
@@ -248,9 +252,12 @@ class GlobalGeneratorUpsampler(nn.Module):
 
 class GlobalGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
-                 padding_type='reflect'):
+                 padding_type='reflect', downsampler_state=None):
         super().__init__()
         self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
+        if downsampler_state is not None:
+            print("Loading pretrained weights into downsampler")
+            self.downsampler.load_state_dict(downsampler_state)
         self.upsampler = GlobalGeneratorUpsampler(output_nc, ngf, n_downsampling, norm_layer)
 
     def forward(self, input):

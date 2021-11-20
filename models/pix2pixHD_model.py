@@ -31,10 +31,14 @@ class Pix2PixHDModel(BaseModel):
         if not opt.no_instance:
             netG_input_nc += 1
         if self.use_features:
-            netG_input_nc += opt.feat_num                  
-        self.netG = networks.define_G(netG_input_nc, opt.output_nc, opt.ngf, opt.netG, 
+            netG_input_nc += opt.feat_num
+        if self.isTrain and not opt.continue_train and opt.with_downsampler_state:
+            downsampler_state = torch.load("./downsampler_state.pt")
+        else:
+            downsampler_state = None
+        self.netG = networks.define_G(netG_input_nc, opt.output_nc, opt.ngf, opt.netG,
                                       opt.n_downsample_global, opt.n_blocks_global, opt.n_local_enhancers, 
-                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids)        
+                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids, downsampler_state=downsampler_state)
 
         # Discriminator network
         if self.isTrain:
