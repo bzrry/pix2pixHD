@@ -184,12 +184,11 @@ class LocalEnhancer(nn.Module):
             output_prev = model_upsample(model_downsample(input_i) + output_prev)
         return output_prev
 
-class GlobalGenerator(nn.Module):
-    def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, 
-                 padding_type='reflect'):
-        assert(n_blocks >= 0)
-        super(GlobalGenerator, self).__init__()        
-        activation = nn.ReLU(True)        
+class GlobalGeneratorDownsampler(nn.Module):
+    def __init__(self, input_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+        assert (n_blocks >= 0)
+        super().__init__()
+        activation = nn.ReLU(True)
 
         model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         ### downsample
@@ -202,8 +201,18 @@ class GlobalGenerator(nn.Module):
         mult = 2**n_downsampling
         for i in range(n_blocks):
             model += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
-        
-        ### upsample         
+
+        self.model = nn.Sequential(*model)
+
+    def forward(self, input):
+        return self.model(input)
+
+class GlobalGeneratorUpsampler(nn.Module):
+    def __init__(self, output_nc, ngf=64, n_downsampling=3, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        activation = nn.ReLU(True)
+        model = []
+
         for i in range(n_downsampling):
             mult = 2**(n_downsampling - i)
             model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), kernel_size=3, stride=2, padding=1, output_padding=1),
@@ -212,8 +221,18 @@ class GlobalGenerator(nn.Module):
         self.model = nn.Sequential(*model)
             
     def forward(self, input):
-        return self.model(input)             
-        
+        return self.model(input)
+
+class GlobalGenerator(nn.Module):
+    def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
+                 padding_type='reflect'):
+        super().__init__()
+        self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
+        self.upsampler = GlobalGeneratorUpsampler(output_nc, ngf, n_downsampling, norm_layer)
+
+    def forward(self, input):
+        return self.upsampler(self.downsampler(input))
+
 # Define a resnet block
 class ResnetBlock(nn.Module):
     def __init__(self, dim, padding_type, norm_layer, activation=nn.ReLU(True), use_dropout=False):
