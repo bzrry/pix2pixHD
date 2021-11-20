@@ -199,6 +199,7 @@ class GlobalGeneratorDownsampler(nn.Module):
 
         ### resnet blocks
         mult = 2**n_downsampling
+        self.out_channels = ngf * mult
         for i in range(n_blocks):
             model += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
 
@@ -206,6 +207,21 @@ class GlobalGeneratorDownsampler(nn.Module):
 
     def forward(self, input):
         return self.model(input)
+
+class GlobalGeneratorSSLEmbedder(nn.Module):
+    def __init__(self, input_nc, embedding_dim=128, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
+                 padding_type='reflect'):
+        super().__init__()
+        self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(self.downsampler.out_channels, embedding_dim)
+
+    def forward(self, x):
+        x = self.downsampler(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.fc(x)
+        return x
 
 class GlobalGeneratorUpsampler(nn.Module):
     def __init__(self, output_nc, ngf=64, n_downsampling=3, norm_layer=nn.BatchNorm2d):
