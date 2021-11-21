@@ -257,7 +257,11 @@ class GlobalGenerator(nn.Module):
         super().__init__()
         self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
         if downsampler_state is not None:
-            print("Loading pretrained weights into downsampler")
+            print("Downsampler:")
+            print(self.downsampler)
+            print("Downsampler keys:")
+            print("Loading pretrained weights into downsampler...")
+            print(self.downsampler.state_dict().keys())
             self.downsampler.load_state_dict(downsampler_state)
         self.upsampler = GlobalGeneratorUpsampler(output_nc, ngf, n_downsampling, norm_layer)
 
