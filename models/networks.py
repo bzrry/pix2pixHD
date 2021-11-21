@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 from vissl.models.trunks import register_model_trunk
 
-from models.p4 import ConvZ2ToP4, ConvP4ToP4, InstanceNormP4, AvgPoolP4
+from models.p4 import ConvZ2ToP4, ConvP4ToP4, InstanceNormP4
 
 ###############################################################################
 # Functions
@@ -56,9 +56,10 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
     netG.apply(weights_init)
     return netG
 
-def define_D(input_nc, ndf, n_layers_D, norm='instance', use_sigmoid=False, num_D=1, getIntermFeat=False, gpu_ids=[]):        
-    norm_layer = get_norm_layer(norm_type="instance_p4")
-    netD = MultiscaleDiscriminator(input_nc, ndf, n_layers_D, norm_layer, use_sigmoid, num_D, getIntermFeat)   
+def define_D(input_nc, ndf, n_layers_D, norm='instance', use_sigmoid=False, num_D=1, getIntermFeat=False,
+        use_p4_convolutions=False, gpu_ids=[]):
+    norm_layer = get_norm_layer(norm_type=norm)
+    netD = MultiscaleDiscriminator(input_nc, ndf, n_layers_D, norm_layer, use_sigmoid, num_D, getIntermFeat, use_p4_convolutions)
     print(netD)
     if len(gpu_ids) > 0:
         assert(torch.cuda.is_available())
@@ -344,14 +345,14 @@ class Encoder(nn.Module):
 
 class MultiscaleDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, 
-                 use_sigmoid=False, num_D=3, getIntermFeat=False):
+                 use_sigmoid=False, num_D=3, getIntermFeat=False, use_p4_convolutions=False):
         super(MultiscaleDiscriminator, self).__init__()
         self.num_D = num_D
         self.n_layers = n_layers
         self.getIntermFeat = getIntermFeat
      
         for i in range(num_D):
-            netD = NLayerDiscriminator(input_nc, ndf, n_layers, norm_layer, use_sigmoid, getIntermFeat)
+            netD = NLayerDiscriminator(input_nc, ndf, n_layers, norm_layer, use_sigmoid, getIntermFeat, use_p4_convolutions)
             if getIntermFeat:                                
                 for j in range(n_layers+2):
                     setattr(self, 'scale'+str(i)+'_layer'+str(j), getattr(netD, 'model'+str(j)))                                   
@@ -385,33 +386,37 @@ class MultiscaleDiscriminator(nn.Module):
         
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, getIntermFeat=False):
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False,
+            getIntermFeat=False, use_p4_convolutions=False):
         super(NLayerDiscriminator, self).__init__()
         self.getIntermFeat = getIntermFeat
+        self.use_p4_convolutions = use_p4_convolutions
         self.n_layers = n_layers
+        first_conv = ConvZ2ToP4 if use_p4_convolutions else nn.Conv2d
+        main_conv = ConvP4ToP4 if use_p4_convolutions else nn.Conv2d
 
         kw = 4
         padw = int(np.ceil((kw-1.0)/2))
-        sequence = [[ConvZ2ToP4(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]]
+        sequence = [[first_conv(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]]
 
         nf = ndf
         for n in range(1, n_layers):
             nf_prev = nf
             nf = min(nf * 2, 512)
             sequence += [[
-                ConvP4ToP4(nf_prev, nf, kernel_size=kw, stride=2, padding=padw),
+                main_conv(nf_prev, nf, kernel_size=kw, stride=2, padding=padw),
                 norm_layer(nf), nn.LeakyReLU(0.2, True)
             ]]
 
         nf_prev = nf
         nf = min(nf * 2, 512)
         sequence += [[
-            ConvP4ToP4(nf_prev, nf, kernel_size=kw, stride=1, padding=padw),
+            main_conv(nf_prev, nf, kernel_size=kw, stride=1, padding=padw),
             norm_layer(nf),
             nn.LeakyReLU(0.2, True)
         ]]
 
-        sequence += [[ConvP4ToP4(nf, 1, kernel_size=kw, stride=1, padding=padw)]]
+        sequence += [[main_conv(nf, 1, kernel_size=kw, stride=1, padding=padw)]]
 
         if use_sigmoid:
             sequence += [[nn.Sigmoid()]]
@@ -431,7 +436,7 @@ class NLayerDiscriminator(nn.Module):
             for n in range(self.n_layers+2):
                 model = getattr(self, 'model'+str(n))
                 res.append(model(res[-1]))
-            return [x.mean(dim=2) for x in res[1:]]
+            return [x.mean(dim=2) for x in res[1:]] if self.use_p4_convolutions else res[1:]
         else:
             return self.model(input)        
 

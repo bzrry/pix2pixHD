@@ -46,8 +46,9 @@ class Pix2PixHDModel(BaseModel):
             netD_input_nc = input_nc + opt.output_nc
             if not opt.no_instance:
                 netD_input_nc += 1
-            self.netD = networks.define_D(netD_input_nc, opt.ndf, opt.n_layers_D, opt.norm, use_sigmoid, 
-                                          opt.num_D, not opt.no_ganFeat_loss, gpu_ids=self.gpu_ids)
+            disc_norm = "instance_p4" if opt.use_p4_convolutions else opt.norm
+            self.netD = networks.define_D(netD_input_nc, opt.ndf, opt.n_layers_D, disc_norm, use_sigmoid,
+                                          opt.num_D, not opt.no_ganFeat_loss, opt.use_p4_convolutions, gpu_ids=self.gpu_ids)
 
         ### Encoder network
         if self.gen_features:          
