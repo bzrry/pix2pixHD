@@ -142,7 +142,7 @@ class VGGLoss(nn.Module):
 ##############################################################################
 class LocalEnhancer(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=32, n_downsample_global=3, n_blocks_global=9, 
-                 n_local_enhancers=1, n_blocks_local=3, norm_layer=nn.BatchNorm2d, padding_type='reflect'):        
+                 n_local_enhancers=1, n_blocks_local=3, norm_layer=nn.InstanceNorm2d, padding_type='reflect'):
         super(LocalEnhancer, self).__init__()
         self.n_local_enhancers = n_local_enhancers
         
@@ -195,7 +195,7 @@ class LocalEnhancer(nn.Module):
         return output_prev
 
 class GlobalGeneratorDownsampler(nn.Module):
-    def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+    def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d, padding_type='reflect'):
         assert (n_blocks >= 0)
         super().__init__()
         activation = nn.ReLU(True)
@@ -235,7 +235,7 @@ class GlobalGeneratorSSLEmbedder(nn.Module):
         return [x]
 
 class GlobalGeneratorUpsampler(nn.Module):
-    def __init__(self, output_nc, ngf=64, n_downsampling=3, norm_layer=nn.BatchNorm2d):
+    def __init__(self, output_nc, ngf=64, n_downsampling=3, norm_layer=nn.InstanceNorm2d):
         super().__init__()
         activation = nn.ReLU(True)
         model = []
@@ -252,16 +252,12 @@ class GlobalGeneratorUpsampler(nn.Module):
         return self.model(input)
 
 class GlobalGenerator(nn.Module):
-    def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
+    def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d,
                  padding_type='reflect', downsampler_state=None):
         super().__init__()
         self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
         if downsampler_state is not None:
-            print("Downsampler:")
-            print(self.downsampler)
-            print("Downsampler keys:")
             print("Loading pretrained weights into downsampler...")
-            print(self.downsampler.state_dict().keys())
             self.downsampler.load_state_dict(downsampler_state)
         self.upsampler = GlobalGeneratorUpsampler(output_nc, ngf, n_downsampling, norm_layer)
 
@@ -311,7 +307,7 @@ class ResnetBlock(nn.Module):
         return out
 
 class Encoder(nn.Module):
-    def __init__(self, input_nc, output_nc, ngf=32, n_downsampling=4, norm_layer=nn.BatchNorm2d):
+    def __init__(self, input_nc, output_nc, ngf=32, n_downsampling=4, norm_layer=nn.InstanceNorm2d):
         super(Encoder, self).__init__()        
         self.output_nc = output_nc        
 
@@ -348,7 +344,7 @@ class Encoder(nn.Module):
         return outputs_mean
 
 class MultiscaleDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, 
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.InstanceNorm2d,
                  use_sigmoid=False, num_D=3, getIntermFeat=False, use_p4_convolutions=False):
         super(MultiscaleDiscriminator, self).__init__()
         self.num_D = num_D
@@ -390,7 +386,7 @@ class MultiscaleDiscriminator(nn.Module):
         
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False,
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.InstanceNorm2d, use_sigmoid=False,
             getIntermFeat=False, use_p4_convolutions=False):
         super(NLayerDiscriminator, self).__init__()
         self.getIntermFeat = getIntermFeat
