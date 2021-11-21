@@ -223,7 +223,7 @@ class GlobalGeneratorSSLEmbedder(nn.Module):
     def __init__(self, model_config, model_name):
         super().__init__()
         embedding_dim = 2048
-        self.downsampler = GlobalGeneratorDownsampler()
+        self.downsampler = GlobalGeneratorDownsampler(n_downsampling=4)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(self.downsampler.out_channels, embedding_dim)
 
