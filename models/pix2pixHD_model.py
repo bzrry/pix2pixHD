@@ -34,7 +34,8 @@ class Pix2PixHDModel(BaseModel):
         if self.use_features:
             netG_input_nc += opt.feat_num
         if self.isTrain and not opt.continue_train and opt.with_downsampler_state:
-            downsampler_state = torch.load("./downsampler_state.pt")
+            ds_filename = "./downsampler_state_3layer.pt" if opt.n_downsample_global == 3 else "./downsampler_state.pt"
+            downsampler_state = torch.load(ds_filename)
         else:
             downsampler_state = None
         self.netG = networks.define_G(netG_input_nc, opt.output_nc, opt.ngf, opt.netG,
