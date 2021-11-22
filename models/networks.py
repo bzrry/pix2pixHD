@@ -406,7 +406,6 @@ class NLayerDiscriminator(nn.Module):
             getIntermFeat=False, use_p4_convolutions=False):
         super(NLayerDiscriminator, self).__init__()
         self.getIntermFeat = getIntermFeat
-        self.use_p4_convolutions = use_p4_convolutions
         self.n_layers = n_layers
         first_conv = ConvZ2ToP4 if use_p4_convolutions else nn.Conv2d
         main_conv = ConvP4ToP4 if use_p4_convolutions else nn.Conv2d
@@ -447,12 +446,13 @@ class NLayerDiscriminator(nn.Module):
             self.model = nn.Sequential(*sequence_stream)
 
     def forward(self, input):
+        print("THIS CODE SHOULD NEVER RUN (NLayerDiscriminator.forward)")
         if self.getIntermFeat:
             res = [input]
             for n in range(self.n_layers+2):
                 model = getattr(self, 'model'+str(n))
                 res.append(model(res[-1]))
-            return [x.mean(dim=2) for x in res[1:]] if self.use_p4_convolutions else res[1:]
+            return res[1:]
         else:
             return self.model(input)        
 
