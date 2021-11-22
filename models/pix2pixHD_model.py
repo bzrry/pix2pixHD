@@ -23,6 +23,7 @@ class Pix2PixHDModel(BaseModel):
         self.isTrain = opt.isTrain
         self.use_features = opt.instance_feat or opt.label_feat
         self.gen_features = self.use_features and not self.opt.load_features
+        self.use_p4_convolutions = opt.use_p4_convolutions
         input_nc = opt.label_nc if opt.label_nc != 0 else opt.input_nc
 
         ##### define networks        
@@ -168,16 +169,20 @@ class Pix2PixHDModel(BaseModel):
         fake_image = self.netG.forward(input_concat)
 
         # Fake Detection and Loss
+        # pred = [[layer1_output, layer2_output, ...]]
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
-        loss_D_fake = self.criterionGAN(pred_fake_pool, False)        
+        pred_fake_pool_2 = [[y.mean(dim=2) for y in x] for x in pred_fake_pool] if self.use_p4_convolutions else pred_fake_pool
+        loss_D_fake = self.criterionGAN(pred_fake_pool_2, False)
 
         # Real Detection and Loss        
         pred_real = self.discriminate(input_label, real_image)
-        loss_D_real = self.criterionGAN(pred_real, True)
+        pred_real_2 = [[y.mean(dim=2) for y in x] for x in pred_real] if self.use_p4_convolutions else pred_real
+        loss_D_real = self.criterionGAN(pred_real_2, True)
 
         # GAN loss (Fake Passability Loss)        
         pred_fake = self.netD.forward(torch.cat((input_label, fake_image), dim=1))        
-        loss_G_GAN = self.criterionGAN(pred_fake, True)               
+        pred_fake_2 = [[y.mean(dim=2) for y in x] for x in pred_fake] if self.use_p4_convolutions else pred_fake
+        loss_G_GAN = self.criterionGAN(pred_fake_2, True)
         
         # GAN feature matching loss
         loss_G_GAN_Feat = 0
