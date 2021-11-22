@@ -30,7 +30,7 @@ IMAGE_EMBEDDER_BACKBONES(
 
 datamodule = ImageClassificationData.from_datasets(
     train_dataset=ImageFolder("../crops"),
-    batch_size=512,
+    batch_size=16,
     num_workers=8,
 )
 embedder = ImageEmbedder(
@@ -39,13 +39,13 @@ embedder = ImageEmbedder(
     head="simclr_head",
     pretraining_transform="barlow_twins_transform",
     training_strategy_kwargs={"latent_embedding_dim": 128},
-    pretraining_transform_kwargs={"size_crops": [196]},
+    pretraining_transform_kwargs={"size_crops": [512]},
 )
 trainer = flash.Trainer(
-    max_epochs=50,
+    max_epochs=120,
     gpus=torch.cuda.device_count(),
     strategy="ddp",
-    log_every_n_steps=1,
+    log_every_n_steps=10,
 )
 trainer.fit(embedder, datamodule=datamodule)
 print("Saving downsampler state to disk...")
