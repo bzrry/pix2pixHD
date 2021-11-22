@@ -30,7 +30,7 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_global=9, n_local_enhancers=1, 
-             n_blocks_local=3, norm='instance', gpu_ids=[], downsampler_state=None):
+             n_blocks_local=3, norm='instance', gpu_ids=[], use_p4_convolutions_in_gen=False, downsampler_state=None):
     norm_layer = get_norm_layer(norm_type=norm)     
     if netG == 'global':    
         netG = GlobalGenerator(
@@ -40,7 +40,8 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
             n_downsample_global,
             n_blocks_global,
             norm_layer,
-            downsampler_state=downsampler_state,
+            use_p4_convolutions_in_gen,
+            downsampler_state,
         )
     elif netG == 'local':        
         netG = LocalEnhancer(input_nc, output_nc, ngf, n_downsample_global, n_blocks_global, 
@@ -112,6 +113,7 @@ class GANLoss(nn.Module):
         return target_tensor
 
     def __call__(self, input, target_is_real):
+        #input = [[first_layer_out, second_layer_out, ..., last_layer_out]]
         if isinstance(input[0], list):
             loss = 0
             for input_i in input:
@@ -195,28 +197,37 @@ class LocalEnhancer(nn.Module):
         return output_prev
 
 class GlobalGeneratorDownsampler(nn.Module):
-    def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d, padding_type='reflect'):
+    def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d,
+            padding_type='reflect', use_p4_convolutions_in_gen=False):
         assert (n_blocks >= 0)
         super().__init__()
         activation = nn.ReLU(True)
+        self.use_p4_convolutions_in_gen = use_p4_convolutions_in_gen
+        first_conv = ConvZ2ToP4 if use_p4_convolutions_in_gen else nn.Conv2d
+        main_conv = ConvP4ToP4 if use_p4_convolutions_in_gen else nn.Conv2d
+        if use_p4_convolutions_in_gen:
+            norm_layer = InstanceNormP4
 
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
+        model = [nn.ReflectionPad2d(3), first_conv(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         ### downsample
         for i in range(n_downsampling):
             mult = 2**i
-            model += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1),
+            model += [main_conv(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1),
                       norm_layer(ngf * mult * 2), activation]
 
         ### resnet blocks
         mult = 2**n_downsampling
         self.out_channels = ngf * mult
         for i in range(n_blocks):
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
+            model += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer, use_p4_convolutions_in_gen=use_p4_convolutions_in_gen)]
 
         self.model = nn.Sequential(*model)
 
     def forward(self, input):
-        return self.model(input)
+        out = self.model(input)
+        if self.use_p4_convolutions_in_gen:
+            out = out.mean(dim=2)
+        return out
 
 @register_model_trunk("pix2pixHDEmbedder")
 class GlobalGeneratorSSLEmbedder(nn.Module):
@@ -253,9 +264,10 @@ class GlobalGeneratorUpsampler(nn.Module):
 
 class GlobalGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d,
-                 padding_type='reflect', downsampler_state=None):
+                 padding_type='reflect', use_p4_convolutions_in_gen=False, downsampler_state=None):
         super().__init__()
-        self.downsampler = GlobalGeneratorDownsampler(input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type)
+        self.downsampler = GlobalGeneratorDownsampler(
+            input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type, use_p4_convolutions_in_gen)
         if downsampler_state is not None:
             print("Loading pretrained weights into downsampler...")
             self.downsampler.load_state_dict(downsampler_state)
@@ -266,13 +278,17 @@ class GlobalGenerator(nn.Module):
 
 # Define a resnet block
 class ResnetBlock(nn.Module):
-    def __init__(self, dim, padding_type, norm_layer, activation=nn.ReLU(True), use_dropout=False):
+    def __init__(self, dim, padding_type, norm_layer, activation=nn.ReLU(True), use_dropout=False, use_p4_convolutions_in_gen=False):
         super(ResnetBlock, self).__init__()
-        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, activation, use_dropout)
+        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, activation, use_dropout, use_p4_convolutions_in_gen)
 
-    def build_conv_block(self, dim, padding_type, norm_layer, activation, use_dropout):
+    def build_conv_block(self, dim, padding_type, norm_layer, activation, use_dropout, use_p4_convolutions_in_gen):
+        main_conv = ConvP4ToP4 if use_p4_convolutions_in_gen else nn.Conv2d
         conv_block = []
         p = 0
+        if use_p4_convolutions_in_gen:
+            padding_type = 'zero'
+
         if padding_type == 'reflect':
             conv_block += [nn.ReflectionPad2d(1)]
         elif padding_type == 'replicate':
@@ -282,7 +298,7 @@ class ResnetBlock(nn.Module):
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
 
-        conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
+        conv_block += [main_conv(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim),
                        activation]
         if use_dropout:
@@ -297,7 +313,7 @@ class ResnetBlock(nn.Module):
             p = 1
         else:
             raise NotImplementedError('padding [%s] is not implemented' % padding_type)
-        conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
+        conv_block += [main_conv(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim)]
 
         return nn.Sequential(*conv_block)

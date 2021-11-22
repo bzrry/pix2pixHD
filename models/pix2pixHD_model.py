@@ -40,7 +40,8 @@ class Pix2PixHDModel(BaseModel):
             downsampler_state = None
         self.netG = networks.define_G(netG_input_nc, opt.output_nc, opt.ngf, opt.netG,
                                       opt.n_downsample_global, opt.n_blocks_global, opt.n_local_enhancers, 
-                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids, downsampler_state=downsampler_state)
+                                      opt.n_blocks_local, opt.norm, gpu_ids=self.gpu_ids,
+                                      use_p4_convolutions_in_gen=opt.use_p4_convolutions_in_gen, downsampler_state=downsampler_state)
 
         # Discriminator network
         if self.isTrain:
@@ -191,6 +192,8 @@ class Pix2PixHDModel(BaseModel):
             feat_weights = 4.0 / (self.opt.n_layers_D + 1)
             D_weights = 1.0 / self.opt.num_D
             for i in range(self.opt.num_D):
+                # pred[i] = [layer1_output, layer2_output, ...]
+                # pred[i][j] = layer1_output
                 for j in range(len(pred_fake[i])-1):
                     loss_G_GAN_Feat += D_weights * feat_weights * \
                         self.criterionFeat(pred_fake[i][j], pred_real[i][j].detach()) * self.opt.lambda_feat
