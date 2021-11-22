@@ -40,8 +40,8 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
             n_downsample_global,
             n_blocks_global,
             norm_layer,
-            use_p4_convolutions_in_gen,
-            downsampler_state,
+            use_p4_convolutions_in_gen=use_p4_convolutions_in_gen,
+            downsampler_state=downsampler_state,
         )
     elif netG == 'local':        
         netG = LocalEnhancer(input_nc, output_nc, ngf, n_downsample_global, n_blocks_global, 
