@@ -350,8 +350,7 @@ class MultiscaleDiscriminator(nn.Module):
         self.num_D = num_D
         self.n_layers = n_layers
         self.getIntermFeat = getIntermFeat
-        self.use_p4_convolutions = use_p4_convolutions
-
+     
         for i in range(num_D):
             netD = NLayerDiscriminator(input_nc, ndf, n_layers, norm_layer, use_sigmoid, getIntermFeat, use_p4_convolutions)
             if getIntermFeat:                                
@@ -367,7 +366,7 @@ class MultiscaleDiscriminator(nn.Module):
             result = [input]
             for i in range(len(model)):
                 result.append(model[i](result[-1]))
-            return [x.mean(dim=2) for x in result[1:]] if self.use_p4_convolutions else result[1:]
+            return result[1:]
         else:
             return [model(input)]
 
