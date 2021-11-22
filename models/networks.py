@@ -229,7 +229,7 @@ class GlobalGeneratorDownsampler(nn.Module):
         out = self.model(input)
         if self.use_p4_convolutions_in_gen:
             if self.p4_max_pool:
-                out = out.max(dim=2)
+                out = out.max(dim=2).values
             else:
                 out = out.mean(dim=2)
         return out

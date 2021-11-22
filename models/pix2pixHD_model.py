@@ -172,7 +172,7 @@ class Pix2PixHDModel(BaseModel):
         fake_image = self.netG.forward(input_concat)
 
         if self.opt.p4_max_pool:
-            agg_p4 = lambda a: a.max(dim=2)
+            agg_p4 = lambda a: a.max(dim=2).values
         else:
             agg_p4 = lambda a: a.mean(dim=2)
 
