@@ -30,7 +30,7 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_global=9, n_local_enhancers=1, 
-             n_blocks_local=3, norm='instance', gpu_ids=[], use_p4_convolutions_in_gen=False, downsampler_state=None):
+             n_blocks_local=3, norm='instance', gpu_ids=[], use_p4_convolutions_in_gen=False, p4_max_pool=False, downsampler_state=None):
     norm_layer = get_norm_layer(norm_type=norm)     
     if netG == 'global':    
         netG = GlobalGenerator(
@@ -41,6 +41,7 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
             n_blocks_global,
             norm_layer,
             use_p4_convolutions_in_gen=use_p4_convolutions_in_gen,
+            p4_max_pool=p4_max_pool,
             downsampler_state=downsampler_state,
         )
     elif netG == 'local':        
@@ -198,11 +199,12 @@ class LocalEnhancer(nn.Module):
 
 class GlobalGeneratorDownsampler(nn.Module):
     def __init__(self, input_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d,
-            padding_type='reflect', use_p4_convolutions_in_gen=False):
+            padding_type='reflect', use_p4_convolutions_in_gen=False, p4_max_pool=False):
         assert (n_blocks >= 0)
         super().__init__()
         activation = nn.ReLU(True)
         self.use_p4_convolutions_in_gen = use_p4_convolutions_in_gen
+        self.p4_max_pool = p4_max_pool
         first_conv = ConvZ2ToP4 if use_p4_convolutions_in_gen else nn.Conv2d
         main_conv = ConvP4ToP4 if use_p4_convolutions_in_gen else nn.Conv2d
         if use_p4_convolutions_in_gen:
@@ -226,7 +228,10 @@ class GlobalGeneratorDownsampler(nn.Module):
     def forward(self, input):
         out = self.model(input)
         if self.use_p4_convolutions_in_gen:
-            out = out.mean(dim=2)
+            if self.p4_max_pool:
+                out = out.max(dim=2)
+            else:
+                out = out.mean(dim=2)
         return out
 
 @register_model_trunk("pix2pixHDEmbedder")
@@ -264,10 +269,10 @@ class GlobalGeneratorUpsampler(nn.Module):
 
 class GlobalGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.InstanceNorm2d,
-                 padding_type='reflect', use_p4_convolutions_in_gen=False, downsampler_state=None):
+                 padding_type='reflect', use_p4_convolutions_in_gen=False, p4_max_pool=False, downsampler_state=None):
         super().__init__()
         self.downsampler = GlobalGeneratorDownsampler(
-            input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type, use_p4_convolutions_in_gen)
+            input_nc, ngf, n_downsampling, n_blocks, norm_layer, padding_type, use_p4_convolutions_in_gen, p4_max_pool)
         if downsampler_state is not None:
             print("Loading pretrained weights into downsampler...")
             self.downsampler.load_state_dict(downsampler_state)

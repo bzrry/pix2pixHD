@@ -22,6 +22,7 @@ class BaseOptions():
         self.parser.add_argument('--local_rank', type=int, default=0, help='local rank for distributed training')
         self.parser.add_argument('--use_p4_convolutions', action='store_true', help='use p4 equivariant convolutions in the discriminator')
         self.parser.add_argument('--use_p4_convolutions_in_gen', action='store_true', help='use p4 equivariant convolutions in the generator')
+        self.parser.add_argument('--p4_max_pool', action='store_true', help='reduce p4 components with max instead of mean')
 
         # input/output sizes       
         self.parser.add_argument('--batchSize', type=int, default=1, help='input batch size')
